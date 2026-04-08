@@ -18,7 +18,10 @@ or PDF folders. Staff type a question in plain English:
 - *"What's our policy on patron behavior in the building?"*
 
 The assistant reads RHPL's official policy documents and answers directly from them — citing
-the specific policy number and document name so staff can always verify the source.
+the specific policy number and document name so staff can always verify the source. Open WebUI
+even surfaces the source document inline so staff can click through to read the full policy.
+
+![RHPL Policies and Procedures model answering a question about puzzle kit loan limits, with the CIRC-2 policy document open showing the full loan table](docs/policies-demo.png)
 
 **The model only answers from official documents.** It does not guess, invent, or draw on
 outside knowledge. If the answer isn't in the knowledge base, it says so and directs staff
@@ -193,6 +196,82 @@ enforces:
   so clearly and directs the staff member to the library director
 
 Adapt the prompt to match your library's document naming conventions and structure.
+
+---
+
+## Google Workspace Authentication
+
+RHPL restricts access to `localai.rhpl.org` using Google OAuth — staff sign in with their
+`@rhpl.org` Google Workspace accounts. No separate username or password is required, and
+anyone outside the `rhpl.org` domain is blocked automatically.
+
+This is configured entirely through Open WebUI environment variables in `docker-compose.yml`.
+No custom code is needed.
+
+### How it works
+
+When a staff member visits the site, they see only a **Sign in with Google** button. After
+authenticating with their Google Workspace account, Open WebUI checks that their email domain
+matches `rhpl.org` and creates (or logs into) their account automatically. The local
+username/password login form is disabled entirely.
+
+### docker-compose.yml environment variables
+
+Add these to your `open-webui` service in `docker-compose.yml`:
+
+```yaml
+environment:
+  - OAUTH_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID}
+  - OAUTH_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET}
+  - OAUTH_PROVIDER_NAME=Google
+  - OPENID_PROVIDER_URL=https://accounts.google.com/.well-known/openid-configuration
+  - OAUTH_SCOPES=openid email profile
+  - OAUTH_ALLOWED_DOMAINS=yourlibrary.org
+  - ENABLE_OAUTH_SIGNUP=true
+  - DEFAULT_USER_ROLE=user
+  - WEBUI_AUTH=true
+  - ENABLE_LOGIN_FORM=false
+```
+
+Store the actual client ID and secret in a `.env` file alongside `docker-compose.yml` (never
+commit them to the repository):
+
+```
+OAUTH_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+OAUTH_GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+### Setting up the Google OAuth app
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a new project
+   (or use an existing one in your Google Workspace org)
+2. Navigate to **APIs & Services → OAuth consent screen**
+   - Set User type to **Internal** — this restricts the app to your Google Workspace domain
+     only and requires no Google review
+   - Fill in app name, support email, and developer contact
+3. Navigate to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Add your Open WebUI URL to **Authorized redirect URIs**:
+     `https://your-openwebui-server/oauth/oidc/callback`
+4. Copy the **Client ID** and **Client Secret** into your `.env` file
+5. Restart the Open WebUI container — the Google login button appears automatically
+
+### Key settings explained
+
+| Variable | What it does |
+|----------|-------------|
+| `OAUTH_ALLOWED_DOMAINS=yourlibrary.org` | Blocks any Google account not from your domain |
+| `ENABLE_OAUTH_SIGNUP=true` | Auto-creates an account on first login — no manual user provisioning needed |
+| `DEFAULT_USER_ROLE=user` | New accounts get standard user access; promote specific staff to Admin in the UI |
+| `ENABLE_LOGIN_FORM=false` | Hides the email/password form entirely — Google is the only login option |
+
+### Why this matters for a library
+
+Using Google Workspace SSO means:
+- Staff use credentials they already have and rotate automatically with their Google account
+- No separate password database to manage or secure
+- Leavers lose access automatically when their Google Workspace account is suspended
+- IT can see who has access via the Google Admin Console
 
 ---
 
