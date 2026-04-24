@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
+.claude/settings.local.json
